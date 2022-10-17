@@ -1,0 +1,263 @@
+---
+title: "Finale Project"
+author: "Author: Katrina Liu"
+date: "2022-10-16"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+# Analysis of Gene Expression and Mutation Information of TCGA-MESO Project
+
+## 1. Loading the dataset
+
+### 1.1 Load necessary libraries
+
+```{r}
+library(dbplyr)
+library(data.table)
+library(tidyverse)
+library(tibble)
+library(SummarizedExperiment)
+library(TCGAbiolinks)
+```
+
+### 1.2 Create GDC query for TCGA-MESO mutation records
+
+```{r}
+query <- GDCquery(
+    project = "TCGA-MESO", 
+    data.category = "Simple Nucleotide Variation", 
+    access = "open", 
+    legacy = FALSE, 
+    data.type = "Masked Somatic Mutation", 
+    workflow.type = "Aliquot Ensemble Somatic Variant Merging and Masking"
+)
+GDCdownload(query)
+maf <- GDCprepare(query)
+```
+
+### 1.3 Create GDCquery for TCGA-MESO gene expression data
+
+```{r}
+query_ge <- GDCquery(
+    project = "TCGA-MESO", 
+    data.category = "Transcriptome Profiling", 
+    access = "open", 
+    legacy = FALSE, 
+    data.type = "Gene Expression Quantification", 
+    workflow.type = "STAR - Counts"
+    
+)
+GDCdownload(query_ge)
+ge_mat <- GDCprepare(query_ge,save = T,save.filename = "tcga_read.rdata")
+
+```
+
+### 1.4 Loading the gene expression data, sample information, and gene information
+
+```{r}
+GEMatrix <- SummarizedExperiment::assay(ge_mat)
+sample_metadata = data.frame(colData(ge_mat))
+gene_metadata = data.frame(rowData(ge_mat))
+```
+
+## 2. Examining Sample Information
+
+### 2.1 Separating the samples by age group at index
+
+```{r}
+sample_metadata$age_group = case_when(
+  is.na(sample_metadata$age_at_index) ~ "Unknown",
+  sample_metadata$age_at_index < 10 ~ "0-9",
+  sample_metadata$age_at_index < 20 ~ "10-19",
+  sample_metadata$age_at_index < 30 ~ "20-29",
+  sample_metadata$age_at_index < 40 ~ "30-39",
+  sample_metadata$age_at_index < 50 ~ "40-49",
+  sample_metadata$age_at_index < 60 ~ "50-59",
+  sample_metadata$age_at_index < 70 ~ "60-69",
+  sample_metadata$age_at_index < 80 ~ "70-79",
+  sample_metadata$age_at_index < 90 ~ "80-89",
+  sample_metadata$age_at_index < 100 ~ "90-99",
+  TRUE ~ "100+"
+    )
+sample_metadata %>% group_by(age_group) %>% summarise(count = n()) %>% ungroup
+```
+
+```{r}
+g = ggplot(sample_metadata) + geom_bar(aes(x=age_group, fill=vital_status),stat="count") + facet_grid(cols=vars(vital_status))
+g
+```
+
+```{r}
+g = ggplot(sample_metadata) + geom_bar(aes(x=primary_diagnosis, fill=prior_treatment), stat="count")+theme(axis.text.x = element_text(angle=90))
+g
+```
+
+```{r}
+sample_metadata$stage = sapply(sample_metadata$ajcc_pathologic_stage, function(x){
+  if (x == "Stage I" || x=="Stage IA" ||x=="Stage IB") return ("Stage I");
+  return (x);
+})
+g = ggplot(sample_metadata) + geom_bar(aes(x=primary_diagnosis, fill=stage), stat="count")+theme(axis.text.x = element_text(angle=90))
+g
+```
+
+## 2.2 Examining the gene information
+
+```{r}
+g = ggplot(gene_metadata) + geom_bar(aes(x=gene_type), stat="count")+theme(axis.text.x = element_text(angle=90))
+g
+```
+
+### 2.3 Examining the mutation variation
+
+```{r}
+g= ggplot(maf) + geom_bar(aes(x=Variant_Type,fill=IMPACT))+facet_grid(cols=vars(IMPACT))
+g
+```
+
+```{r}
+g = ggplot(maf) + geom_bar(aes(x=One_Consequence, fill=IMPACT),stat="count")+facet_grid(rows=vars(IMPACT))+theme(axis.text.x = element_text(angle=90))
+g
+```
+
+```{r}
+g= ggplot(maf) + geom_bar(aes(fill=IMPACT,x=Variant_Classification))+facet_grid(rows=vars(IMPACT))+theme(axis.text.x = element_text(angle=90))
+g
+```
+
+```{r}
+maf$consequence_list = strsplit(maf$Consequence,";")
+consequences = maf$consequence_list %>% lapply(unlist)
+unique_cons = consequences %>% unlist %>% unique()
+for (c in unique_cons){
+  maf[,c] = sapply(maf$consequence_list, function(x){return(c %in% x)})
+}
+cons_select = maf %>% select(Gene, all_of(unique_cons)) 
+cons = cons_select %>% pivot_longer(cols=-Gene, names_to = "consequence", values_to = "have") %>% filter(have==T) %>% unique()
+g = ggplot(cons) + geom_bar(aes(x=consequence),stat="count")+theme(axis.text.x = element_text(angle=90))
+g
+```
+
+```{r}
+cons_sample_select = maf %>% select(Tumor_Sample_Barcode, all_of(unique_cons)) 
+cons_sample = cons_sample_select %>% pivot_longer(cols=-Tumor_Sample_Barcode, names_to = "consequence", values_to = "have") %>% filter(have==T) %>% unique()
+g = ggplot(cons_sample) + geom_bar(aes(x=consequence),stat="count")+theme(axis.text.x = element_text(angle=90))
+g
+```
+
+## 3. Data Processing
+
+### 3.0 Preprocess
+
+```{r}
+maf$sample_name = maf$Tumor_Sample_Barcode %>% sapply(function(x){return (substring(x,1,15))})
+comb_sample_maf = maf %>% left_join(sample_metadata, by=c("sample_name"="sample.aux")) 
+```
+
+### 3.1 Find principal components of consequences
+
+```{r}
+cons_wide = cons %>% pivot_wider(id_cols=Gene,names_from = consequence, values_from = have, values_fill = F)
+cons_wide = cons_wide %>% column_to_rownames(var="Gene")
+```
+
+```{r}
+cons_wide_scale = scale(cons_wide)
+pca = prcomp(cons_wide)
+pca_variance = data.frame(PC = 1:ncol(pca$x), Variance = pca$sdev^2/sum(pca$sdev^2)*100)
+                        
+g = ggplot(pca_variance) + 
+  geom_bar( aes(PC, Variance), stat = "identity") + ylab("Percent of variance explained")
+g
+```
+
+```{r}
+pc_var_90 = function(pc, target=90){
+  variance = pca$sdev^2/sum(pca$sdev^2)*100
+  count = 0
+  for (i in 1:length(variance)){
+    count = count + variance[i]
+    if (count >= target){
+      return (i)
+    }
+  }
+  return (length(variance))
+}
+con_pc_num = pc_var_90(pca)
+```
+
+```{r}
+ggplot(data = data.frame(pca$x)) +geom_point(aes(x=PC1, y=PC2))
+con_clust = kmeans(pca$x[,1:6],4,nstart=100)
+ggplot( data.frame(pca$x)) + geom_point(aes(x=PC1, y=PC2, color=factor(con_clust$cluster)))
+```
+
+```{r}
+pc1_w = pca$rotation %>% data.frame() %>% arrange(-abs(PC1))
+pc1_w$Diagnosis = rownames(pc1_w)
+ggplot(data = pc1_w) + geom_bar(aes(x=Diagnosis, y=PC1), stat="identity") + theme(axis.text.x = element_text(angle=90))
+ggplot(data = pc1_w) + geom_bar(aes(x=Diagnosis, y=PC2), stat="identity") + theme(axis.text.x = element_text(angle=90))
+
+```
+
+```{r}
+
+```
+
+### 3.2 PCA of gene expression
+
+```{r}
+samples_mut = com_sample_maf
+```
+
+```{r}
+GEMatrix_norm <- apply(GEMatrix, 2, function(x){log2(x/sum(x)*1000000+1)})
+filt = apply(GEMatrix,1, function(row) sum(row>10))
+GEMatrix_norm_filter = GEMatrix_norm[filt>=80,]
+```
+
+```{r}
+prep = t(GEMatrix_norm_filter)
+GEMatrix_norm_filter_scale = scale(prep)
+pca_scale = prcomp(GEMatrix_norm_filter_scale)
+```
+
+```{r}
+pca_variance = data.frame(PC = 1:ncol(pca_scale$x), Variance = pca_scale$sdev^2/sum(pca_scale$sdev^2)*100)
+                        
+g = ggplot(pca_variance) + 
+  geom_bar( aes(PC, Variance), stat = "identity") + ylab("Percent of variance explained")
+g
+```
+
+```{r}
+pc_num = pc_var_90(pca_scale)
+```
+
+```{r}
+sample_metadata$GE_PC1 = pca_scale$x[,1]
+sample_metadata$GE_PC2 = pca_scale$x[,2]
+sample_metadata$GE_PC3 = pca_scale$x[,3]
+sample_metadata$GE_PC4 = pca_scale$x[,4]
+ggplot(data = sample_metadata) +geom_point(aes(x=GE_PC1, y=GE_PC2))
+```
+
+```{r}
+head(pca$x)
+ggplot(data = data.frame(pca_scale$x)) +geom_point(aes(x=PC2, y=PC3))
+```
+
+```{r}
+cluster = kmeans(pca_scale$x[,2:pc_num],4,nstart=100)
+sample_metadata$clust = cluster$cluster
+ggplot(data = sample_metadata) +geom_point(aes(x=GE_PC1, y=GE_PC2,color=factor(clust)))
+ggplot(data = sample_metadata) +geom_point(aes(x=GE_PC2, y=GE_PC3,color=factor(clust)))
+
+```
+
+```{r}
+ggplot(data = sample_metadata) +geom_boxplot(aes(x=vital_status, y=GE_PC2))
+```
