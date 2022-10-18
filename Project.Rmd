@@ -63,9 +63,13 @@ sample_metadata = data.frame(colData(ge_mat))
 gene_metadata = data.frame(rowData(ge_mat))
 ```
 
-## 2. Examining Sample Information
+## 2 Examining Sample Information
 
 ### 2.1 Separating the samples by age group at index
+
+We begin by labeling each sample with the corresponding age group at
+index. This will give a brief overview of how the sample ages are
+distributed.
 
 ```{r}
 sample_metadata$age_group = case_when(
@@ -85,15 +89,28 @@ sample_metadata$age_group = case_when(
 sample_metadata %>% group_by(age_group) %>% summarise(count = n()) %>% ungroup
 ```
 
+Then, we want to see one of the most important information of the
+samples we want to find association with, which is the vital status of
+each sample.
+
 ```{r}
-g = ggplot(sample_metadata) + geom_bar(aes(x=age_group, fill=vital_status),stat="count") + facet_grid(cols=vars(vital_status))
+g = ggplot(sample_metadata) + geom_bar(aes(x=age_group, fill=vital_status),stat="count") + facet_grid(cols=vars(vital_status))+xlab("Age Group")+ggtitle("Number of Samples in Each Age Group Separated by Vital Status")+labs(fill="Vital Status")+theme(axis.title.y = element_blank())
 g
 ```
+
+## 2.2 Examination of Sample Disease Attributions
+
+### 2.2.1 Primary Diagnosis and Prior Treatment
 
 ```{r}
 g = ggplot(sample_metadata) + geom_bar(aes(x=primary_diagnosis, fill=prior_treatment), stat="count")+theme(axis.text.x = element_text(angle=90))
 g
 ```
+
+We can see that all samples with prior treatment are primarily diagnosed
+with epithelial mesothelioma, malignant.
+
+### 2.2.2 Primary Diagnosis and Stage of the Disease
 
 ```{r}
 sample_metadata$stage = sapply(sample_metadata$ajcc_pathologic_stage, function(x){
@@ -104,29 +121,82 @@ g = ggplot(sample_metadata) + geom_bar(aes(x=primary_diagnosis, fill=stage), sta
 g
 ```
 
-## 2.2 Examining the gene information
+We see that the stages of the disease do not appear to be associated
+with the primary diagnosis, as samples of each type of primary diagnosis
+are in different stages of the diseases, except for the fibrous
+mesothelioma, which might be affected by the limitation of sample size
+with this diagnosis.
+
+## 3. Examining the Gene Information
+
+### 3.1 Gene Types
+
+We want to briefly look at what are the major types of genes included in
+this project to determine what would be a good approximation of the
+number of the principle components we should included in our further
+research.
 
 ```{r}
 g = ggplot(gene_metadata) + geom_bar(aes(x=gene_type), stat="count")+theme(axis.text.x = element_text(angle=90))
 g
 ```
 
-### 2.3 Examining the mutation variation
+Here, it seems that some of major gene types are the lncRNA genes,
+processed pseudogenes, protein encoding genes. A reasonable estimated
+number of principle components included should be 4-6 components.
+
+## 4. Examining the mutation variation
+
+### 4.1 Variation Types and Impact of Variations
+
+There are three different variant types, deletion, insertion, and SNP,
+and four different levels of impact of each variation, high, low,
+moderate, and modifier. Based on the biological interpretation of each
+types of the variations, comparing to deletion and insertion, the
+majority of SNP are not as severe.
 
 ```{r}
 g= ggplot(maf) + geom_bar(aes(x=Variant_Type,fill=IMPACT))+facet_grid(cols=vars(IMPACT))
 g
 ```
 
-```{r}
-g = ggplot(maf) + geom_bar(aes(x=One_Consequence, fill=IMPACT),stat="count")+facet_grid(rows=vars(IMPACT))+theme(axis.text.x = element_text(angle=90))
-g
-```
+The above confirms our hypothesis, which shows that most of deletion and
+insertion are of high impact, while most of SNP variation are of low,
+moderate, or modifier impact level.
+
+### 4.2 Variant Classifications
+
+We want to see if the variant classification information correlate
+to the impact level.
 
 ```{r}
 g= ggplot(maf) + geom_bar(aes(fill=IMPACT,x=Variant_Classification))+facet_grid(rows=vars(IMPACT))+theme(axis.text.x = element_text(angle=90))
 g
 ```
+
+From the above graph, we can see that each variant class falls
+into one impact level.
+
+### 4.3 Consequences of Variation
+
+#### 4.3.1 One Consequence
+
+The mutation data contains one consequence of the variants. We want to
+see how they are related to the impact level of the variations.
+
+```{r}
+g = ggplot(maf) + geom_bar(aes(x=One_Consequence, fill=IMPACT),stat="count")+facet_grid(rows=vars(IMPACT))+theme(axis.text.x = element_text(angle=90))
+g
+```
+
+Just by looking at this figure, it seems that all consequences are
+divided into a certain impact level. It appears that the consequences
+can be divided into four impact level groups.
+
+
+
+#### 4.3.2 Multiple Memberships in Types of Consequences
+Mutation data also provide one complete list of consequences of the variant. This information is stored in a column as a string, so we will need to split them up with string processing. Then, we manipulate the consequence membership data to count the total number of variants with each type of consequences.
 
 ```{r}
 maf$consequence_list = strsplit(maf$Consequence,";")
@@ -136,34 +206,42 @@ for (c in unique_cons){
   maf[,c] = sapply(maf$consequence_list, function(x){return(c %in% x)})
 }
 cons_select = maf %>% select(Gene, all_of(unique_cons)) 
+cons_select_impact = maf %>% select(Gene,IMPACT, all_of(unique_cons))
+cons_impact = cons_select_impact %>% pivot_longer(cols=-c(Gene,IMPACT), names_to = "consequence", values_to = "have") %>% filter(have==T) %>% unique()
 cons = cons_select %>% pivot_longer(cols=-Gene, names_to = "consequence", values_to = "have") %>% filter(have==T) %>% unique()
-g = ggplot(cons) + geom_bar(aes(x=consequence),stat="count")+theme(axis.text.x = element_text(angle=90))
+g = ggplot(cons_impact) + geom_bar(aes(x=consequence, fill=IMPACT),stat="count")+theme(axis.text.x = element_text(angle=90))+facet_grid(rows=vars(IMPACT))
 g
 ```
+By looking at the facet graphs, we can still state that for most type of consequences, the variant associated are only of one certain impact level. But that is not the case for splice region variant.
+
+#### 4.3.3 Samples Membership of Consequences
+We want to see how each samples possess variants of different impact levels.
 
 ```{r}
-cons_sample_select = maf %>% select(Tumor_Sample_Barcode, all_of(unique_cons)) 
-cons_sample = cons_sample_select %>% pivot_longer(cols=-Tumor_Sample_Barcode, names_to = "consequence", values_to = "have") %>% filter(have==T) %>% unique()
-g = ggplot(cons_sample) + geom_bar(aes(x=consequence),stat="count")+theme(axis.text.x = element_text(angle=90))
+cons_sample_select = maf %>% select(Tumor_Sample_Barcode,IMPACT, all_of(unique_cons)) 
+cons_sample = cons_sample_select %>% pivot_longer(cols=-c(Tumor_Sample_Barcode,IMPACT), names_to = "consequence", values_to = "have") %>% filter(have==T) %>% unique()
+g = ggplot(cons_sample) + geom_bar(aes(x=consequence,fill=IMPACT),stat="count")+theme(axis.text.x = element_text(angle=90))+facet_grid(rows=vars(IMPACT))
 g
 ```
+However, we see that each sample having one type of variant consequences, they might have different variant impact levels.
 
-## 3. Data Processing
-
-### 3.0 Preprocess
+## 5. Data Analysis
+Finally, after a overview of the straight forward visualization of the data, we have identified some relative obvious association of certain features of samples, genes, and variants. Next, we will dive deeper into the data analysis process with the tool of pca and kmeans clustering.
+### 5.0 Preprocess
+Before we start, we wang to first combing the sample variant data withe sample data.
 
 ```{r}
 maf$sample_name = maf$Tumor_Sample_Barcode %>% sapply(function(x){return (substring(x,1,15))})
 comb_sample_maf = maf %>% left_join(sample_metadata, by=c("sample_name"="sample.aux")) 
 ```
 
-### 3.1 Find principal components of consequences
-
+### 5.1 Find principal components of consequences
+Next, we want to reduce the dimension of consequences into a fewer number of principal components as we previously have observed that several consequences contains only a very small number of associated variants. Therefore, we will try to apply pca and see if there are any significant findings. 
 ```{r}
-cons_wide = cons %>% pivot_wider(id_cols=Gene,names_from = consequence, values_from = have, values_fill = F)
+cons_wide = cons %>% select(Gene,consequence,have)%>% pivot_wider(id_cols=Gene,names_from = consequence, values_from = have, values_fill = F)
 cons_wide = cons_wide %>% column_to_rownames(var="Gene")
 ```
-
+Then, we perform pca on the scaled consequence wide table and see the explained variance of each principle components.
 ```{r}
 cons_wide_scale = scale(cons_wide)
 pca = prcomp(cons_wide)
@@ -188,9 +266,9 @@ pc_var_90 = function(pc, target=90){
 }
 con_pc_num = pc_var_90(pca)
 ```
+Using the code from class, we managed to find that only 6 principle components will be able explained 90 percent of the variances in the consequence membership dataset.
 
 ```{r}
-ggplot(data = data.frame(pca$x)) +geom_point(aes(x=PC1, y=PC2))
 con_clust = kmeans(pca$x[,1:6],4,nstart=100)
 ggplot( data.frame(pca$x)) + geom_point(aes(x=PC1, y=PC2, color=factor(con_clust$cluster)))
 ```
@@ -207,14 +285,19 @@ ggplot(data = pc1_w) + geom_bar(aes(x=Diagnosis, y=PC2), stat="identity") + them
 
 ```
 
-### 3.2 PCA of gene expression
+### 5.2 PCA of gene expression
 
 ```{r}
-samples_mut = com_sample_maf
+samples_mut = comb_sample_maf$barcode %>% unique()
+genes_mut = comb_sample_maf$Gene %>% unique()
+GEMat_filter = GEMatrix[,samples_mut]
+new_rows = rownames(GEMat_filter)
+rows = sapply(new_rows, function(x)strsplit(x,"\\."))
+rownames(GEMat_filter) = data.frame(rows)[1,]
 ```
 
 ```{r}
-GEMatrix_norm <- apply(GEMatrix, 2, function(x){log2(x/sum(x)*1000000+1)})
+GEMatrix_norm <- apply(GEMat_filter, 2, function(x){log2(x/sum(x)*1000000+1)})
 filt = apply(GEMatrix,1, function(row) sum(row>10))
 GEMatrix_norm_filter = GEMatrix_norm[filt>=80,]
 ```
@@ -238,26 +321,29 @@ pc_num = pc_var_90(pca_scale)
 ```
 
 ```{r}
-sample_metadata$GE_PC1 = pca_scale$x[,1]
-sample_metadata$GE_PC2 = pca_scale$x[,2]
-sample_metadata$GE_PC3 = pca_scale$x[,3]
-sample_metadata$GE_PC4 = pca_scale$x[,4]
-ggplot(data = sample_metadata) +geom_point(aes(x=GE_PC1, y=GE_PC2))
+ggplot(data = data.frame(pca_scale$x)) +geom_point(aes(x=PC1, y=PC2))
 ```
 
 ```{r}
-head(pca$x)
 ggplot(data = data.frame(pca_scale$x)) +geom_point(aes(x=PC2, y=PC3))
 ```
 
 ```{r}
 cluster = kmeans(pca_scale$x[,2:pc_num],4,nstart=100)
-sample_metadata$clust = cluster$cluster
-ggplot(data = sample_metadata) +geom_point(aes(x=GE_PC1, y=GE_PC2,color=factor(clust)))
-ggplot(data = sample_metadata) +geom_point(aes(x=GE_PC2, y=GE_PC3,color=factor(clust)))
-
+ggplot(data = data.frame(pca_scale$x)) +geom_point(aes(x=PC1, y=PC2,color=factor(cluster$clust)))
+ggplot(data = data.frame(pca_scale$x)) +geom_point(aes(x=PC2, y=PC3,color=factor(cluster$clust)))
 ```
 
 ```{r}
+sample_metadata = sample_metadata %>% filter(barcode %in% samples_mut)
+sample_metadata$GE_PC2 = pca_scale$x[,2]
 ggplot(data = sample_metadata) +geom_boxplot(aes(x=vital_status, y=GE_PC2))
+```
+
+```{r}
+ge_df = data.frame(pca_scale$x[,1:6]) %>% rownames_to_column(var="barcode")
+comb_sample_maf = comb_sample_maf %>% left_join(ge_df, by=c("barcode"="barcode"))
+ggplot(data = comb_sample_maf) +geom_point(aes(x=PC2.x, y=PC3.x,color=IMPACT))
+ggplot(data = comb_sample_maf) +geom_point(aes(x=PC2.x, y=PC3.x,color=Variant_Type))
+ggplot(data = comb_sample_maf) +geom_point(aes(x=PC2.x, y=PC3.x,color=One_Consequence))
 ```
