@@ -103,8 +103,10 @@ g
 ### 2.2.1 Primary Diagnosis and Prior Treatment
 
 ```{r}
-g = ggplot(sample_metadata) + geom_bar(aes(x=primary_diagnosis, fill=prior_treatment), stat="count")+theme(axis.text.x = element_text(angle=90))
+g = ggplot(sample_metadata) + geom_bar(aes(x=primary_diagnosis, fill=prior_treatment), stat="count")+theme(axis.text.x = element_text(angle=90), axis.title.y = element_blank())+xlab("Primary Diagnosis") + labs(fill="Prior Treatment") +ggtitle("Number of Samples with Each Type of Primary Diagnosis Separated by\nWhether Received Prior Treament")
+# png("images/pd_pt.png")
 g
+#dev.off
 ```
 
 We can see that all samples with prior treatment are primarily diagnosed
@@ -117,8 +119,10 @@ sample_metadata$stage = sapply(sample_metadata$ajcc_pathologic_stage, function(x
   if (x == "Stage I" || x=="Stage IA" ||x=="Stage IB") return ("Stage I");
   return (x);
 })
-g = ggplot(sample_metadata) + geom_bar(aes(x=primary_diagnosis, fill=stage), stat="count")+theme(axis.text.x = element_text(angle=90))
+g = ggplot(sample_metadata) + geom_bar(aes(x=primary_diagnosis, fill=stage), stat="count")+theme(axis.text.x = element_text(angle=90),axis.title.y = element_blank())+xlab("Primary Diagnosis")+labs(fill="Stage")+ggtitle("Number of Samples with Each Type of Primary Diagnosis Separated by Stage of Disease")
+#png("images/pd_s.png")
 g
+#dev.off()
 ```
 
 We see that the stages of the disease do not appear to be associated
@@ -137,8 +141,10 @@ number of the principle components we should included in our further
 research.
 
 ```{r}
-g = ggplot(gene_metadata) + geom_bar(aes(x=gene_type), stat="count")+theme(axis.text.x = element_text(angle=90))
+g = ggplot(gene_metadata) + geom_bar(aes(x=gene_type), stat="count")+theme(axis.text.x = element_text(angle=90),axis.title.y = element_blank())+xlab("Gene Type")+ggtitle("Number of Genes in Each Gene Type")
+#png("images/gt.png")
 g
+#dev.off()
 ```
 
 Here, it seems that some of major gene types are the lncRNA genes,
@@ -156,8 +162,10 @@ types of the variations, comparing to deletion and insertion, the
 majority of SNP are not as severe.
 
 ```{r}
-g= ggplot(maf) + geom_bar(aes(x=Variant_Type,fill=IMPACT))+facet_grid(cols=vars(IMPACT))
+g= ggplot(maf) + geom_bar(aes(x=Variant_Type,fill=IMPACT))+facet_grid(cols=vars(IMPACT))+theme(axis.title.y=element_blank())+xlab("Variant Type")+labs(fill="Impact Level")+ggtitle("Number of Variants of Each Variant Type Separated by Impact Level")
+#png("images/vt_il.png")
 g
+#dev.off()
 ```
 
 The above confirms our hypothesis, which shows that most of deletion and
@@ -166,16 +174,18 @@ moderate, or modifier impact level.
 
 ### 4.2 Variant Classifications
 
-We want to see if the variant classification information correlate
-to the impact level.
+We want to see if the variant classification information correlates to
+the impact level.
 
 ```{r}
-g= ggplot(maf) + geom_bar(aes(fill=IMPACT,x=Variant_Classification))+facet_grid(rows=vars(IMPACT))+theme(axis.text.x = element_text(angle=90))
+g= ggplot(maf) + geom_bar(aes(fill=IMPACT,x=Variant_Classification))+facet_grid(rows=vars(IMPACT))+theme(axis.title.y=element_blank(),axis.text.x = element_text(angle = 90))+xlab("Variant Class")+labs(fill="Impact Level")+ggtitle("Number of Variants of Each Variant Class Separated by Impact Level")
+#png("images/vc_il.png")
 g
+#dev.off()
 ```
 
-From the above graph, we can see that each variant class falls
-into one impact level.
+From the above graph, we can see that each variant class falls into one
+impact level.
 
 ### 4.3 Consequences of Variation
 
@@ -185,18 +195,23 @@ The mutation data contains one consequence of the variants. We want to
 see how they are related to the impact level of the variations.
 
 ```{r}
-g = ggplot(maf) + geom_bar(aes(x=One_Consequence, fill=IMPACT),stat="count")+facet_grid(rows=vars(IMPACT))+theme(axis.text.x = element_text(angle=90))
+g = ggplot(maf) + geom_bar(aes(x=One_Consequence, fill=IMPACT),stat="count")+facet_grid(rows=vars(IMPACT))+theme(axis.text.x = element_text(angle=90), axis.title.y = element_blank())+xlab("One Consequence")+labs(fill="Impact Level")+ggtitle("Number of Variants of One of the Consequences Separated by Impact Level")
+#png("images/oc_il.png")
 g
+#dev.off()
 ```
 
 Just by looking at this figure, it seems that all consequences are
 divided into a certain impact level. It appears that the consequences
 can be divided into four impact level groups.
 
-
-
 #### 4.3.2 Multiple Memberships in Types of Consequences
-Mutation data also provide one complete list of consequences of the variant. This information is stored in a column as a string, so we will need to split them up with string processing. Then, we manipulate the consequence membership data to count the total number of variants with each type of consequences.
+
+Mutation data also provide one complete list of consequences of the
+variant. This information is stored in a column as a string, so we will
+need to split them up with string processing. Then, we manipulate the
+consequence membership data to count the total number of variants with
+each type of consequences.
 
 ```{r}
 maf$consequence_list = strsplit(maf$Consequence,";")
@@ -209,47 +224,91 @@ cons_select = maf %>% select(Gene, all_of(unique_cons))
 cons_select_impact = maf %>% select(Gene,IMPACT, all_of(unique_cons))
 cons_impact = cons_select_impact %>% pivot_longer(cols=-c(Gene,IMPACT), names_to = "consequence", values_to = "have") %>% filter(have==T) %>% unique()
 cons = cons_select %>% pivot_longer(cols=-Gene, names_to = "consequence", values_to = "have") %>% filter(have==T) %>% unique()
-g = ggplot(cons_impact) + geom_bar(aes(x=consequence, fill=IMPACT),stat="count")+theme(axis.text.x = element_text(angle=90))+facet_grid(rows=vars(IMPACT))
+g = ggplot(cons_impact) + geom_bar(aes(x=consequence, fill=IMPACT),stat="count")+facet_grid(rows=vars(IMPACT))+theme(axis.text.x = element_text(angle=90), axis.title.y = element_blank())+xlab("Consequence")+labs(fill="Impact Level")+ggtitle("Number of Variants of the Consequences Separated by Impact Level")
+#png("images/c_il.png")
 g
+#dev.off()
 ```
-By looking at the facet graphs, we can still state that for most type of consequences, the variant associated are only of one certain impact level. But that is not the case for splice region variant.
+
+By looking at the facet graphs, we can still state that for most type of
+consequences, the variant associated are only of one certain impact
+level. But that is not the case for splice region variant.
 
 #### 4.3.3 Samples Membership of Consequences
-We want to see how each samples possess variants of different impact levels.
+
+We want to see how each samples possess variants of different impact
+levels.
 
 ```{r}
 cons_sample_select = maf %>% select(Tumor_Sample_Barcode,IMPACT, all_of(unique_cons)) 
 cons_sample = cons_sample_select %>% pivot_longer(cols=-c(Tumor_Sample_Barcode,IMPACT), names_to = "consequence", values_to = "have") %>% filter(have==T) %>% unique()
-g = ggplot(cons_sample) + geom_bar(aes(x=consequence,fill=IMPACT),stat="count")+theme(axis.text.x = element_text(angle=90))+facet_grid(rows=vars(IMPACT))
+g = ggplot(cons_sample) + geom_bar(aes(x=consequence,fill=IMPACT),stat="count")+facet_grid(rows=vars(IMPACT))+theme(axis.text.x = element_text(angle=90), axis.title.y = element_blank())+xlab("Consequence")+labs(fill="Impact Level")+ggtitle("Number of Samples of Each Consequences Separated by Impact Level")
+#png("images/sc_il.png")
 g
+#dev.off()
 ```
-However, we see that each sample having one type of variant consequences, they might have different variant impact levels.
+
+However, we see that each sample having one type of variant
+consequences, they might have different variant impact levels.
 
 ## 5. Data Analysis
-Finally, after a overview of the straight forward visualization of the data, we have identified some relative obvious association of certain features of samples, genes, and variants. Next, we will dive deeper into the data analysis process with the tool of pca and kmeans clustering.
-### 5.0 Preprocess
-Before we start, we wang to first combing the sample variant data withe sample data.
+
+Finally, after a overview of the straight forward visualization of the
+data, we have identified some relative obvious association of certain
+features of samples, genes, and variants. Next, we will dive deeper into
+the data analysis process with the tool of pca and kmeans clustering.
+\### 5.0 Preprocess Before we start, we wang to first combing the sample
+variant data withe sample data.
 
 ```{r}
 maf$sample_name = maf$Tumor_Sample_Barcode %>% sapply(function(x){return (substring(x,1,15))})
 comb_sample_maf = maf %>% left_join(sample_metadata, by=c("sample_name"="sample.aux")) 
 ```
 
-### 5.1 Find principal components of consequences
-Next, we want to reduce the dimension of consequences into a fewer number of principal components as we previously have observed that several consequences contains only a very small number of associated variants. Therefore, we will try to apply pca and see if there are any significant findings. 
+### 5.1 Typed of Consequences
+
+#### 5.1.1 Hierarchical Clustering
+
+First, we want to see a more direct relationship between each
+consequences based on impact on samples.
+
+```{r}
+cons_sample_impact = cons_sample %>% group_by(consequence,IMPACT) %>% summarise(count = n()) %>% ungroup %>% pivot_wider(id_cols = consequence,names_from = IMPACT, values_from = count, values_fill = 0) %>% column_to_rownames(var="consequence") %>% scale
+distance = dist(cons_sample_impact,method = "euclidian")
+hcluster = hclust(distance, method="average")
+#png("images/dend.png")
+plot(hcluster)
+#dev.off()
+```
+
+We can see that there are three dominant clusters, which are synonymous
+variant, missense variant, and intro variant. The result of the variant
+types form a cluster themselves. \#### 5.1.2 PCA and Kmeans Clustering
+Next, we want to reduce the dimension of consequences into a fewer
+number of principal components as we previously have observed that
+several consequences contains only a very small number of associated
+variants. Therefore, we will try to apply pca and see if there are any
+significant findings.
+
 ```{r}
 cons_wide = cons %>% select(Gene,consequence,have)%>% pivot_wider(id_cols=Gene,names_from = consequence, values_from = have, values_fill = F)
 cons_wide = cons_wide %>% column_to_rownames(var="Gene")
-```
-Then, we perform pca on the scaled consequence wide table and see the explained variance of each principle components.
-```{r}
 cons_wide_scale = scale(cons_wide)
-pca = prcomp(cons_wide)
+```
+
+Then, we perform pca on the scaled consequence wide table and see the
+explained variance of each principle components.
+
+```{r}
+
+pca = prcomp(cons_wide_scale)
 pca_variance = data.frame(PC = 1:ncol(pca$x), Variance = pca$sdev^2/sum(pca$sdev^2)*100)
                         
 g = ggplot(pca_variance) + 
-  geom_bar( aes(PC, Variance), stat = "identity") + ylab("Percent of variance explained")
+  geom_bar( aes(PC, Variance), stat = "identity") + ylab("Percent of variance explained")+ggtitle("Variance Explained by Each Principle Component of Consequences")
+#png("images/con_pca_var.png")
 g
+#dev.off()
 ```
 
 ```{r}
@@ -266,26 +325,46 @@ pc_var_90 = function(pc, target=90){
 }
 con_pc_num = pc_var_90(pca)
 ```
-Using the code from class, we managed to find that only 6 principle components will be able explained 90 percent of the variances in the consequence membership dataset.
+
+Using the code from class, we managed to find that 18 principle
+components will be able explained 90 percent of the variances in the
+consequence membership dataset.
 
 ```{r}
 con_clust = kmeans(pca$x[,1:6],4,nstart=100)
-ggplot( data.frame(pca$x)) + geom_point(aes(x=PC1, y=PC2, color=factor(con_clust$cluster)))
+#png("images/con_pca_dot.png")
+ggplot( data.frame(pca$x)) + geom_point(aes(x=PC1, y=PC2, color=factor(con_clust$cluster)))+labs(color="Kmeans Cluster")+ggtitle("Samples Clustered Based on PCA Processed Consequences")
+#dev.off()
 ```
+
+If we look at the how the sample are distributed on the first and second
+consequence principle component, we can roughly see that there are four
+groups. However, since we are taking into account of 6 principle
+dimensions of consequences, it is not reflected through kmeans
+clustering algorithm.
 
 ```{r}
 pc1_w = pca$rotation %>% data.frame() %>% arrange(-abs(PC1))
-pc1_w$Diagnosis = rownames(pc1_w)
-ggplot(data = pc1_w) + geom_bar(aes(x=Diagnosis, y=PC1), stat="identity") + theme(axis.text.x = element_text(angle=90))
-ggplot(data = pc1_w) + geom_bar(aes(x=Diagnosis, y=PC2), stat="identity") + theme(axis.text.x = element_text(angle=90))
-
+pc1_w$Consequence = rownames(pc1_w)
+#png("images/cons_pc1_w.png")
+ggplot(data = pc1_w) + geom_bar(aes(x=Consequence, y=PC1), stat="identity") + theme(axis.text.x = element_text(angle=90))+ggtitle("Weight of Each Consequence on PC1")
+#dev.off()
+#png("images/cons_pc2_w.png")
+ggplot(data = pc1_w) + geom_bar(aes(x=Consequence, y=PC2), stat="identity") + theme(axis.text.x = element_text(angle=90))+ggtitle("Weight of Each Consequence on PC2")
+#dev.off()
 ```
 
-```{r}
-
-```
+If we look at the weight of each consequences in the first principle
+component and the second one, we can see that the principle component
+carries weight of the majority of consequences, while the second one
+carries weight of two dominant variants, missense variant and synonymous
+variant.
 
 ### 5.2 PCA of gene expression
+
+Next, we want to preprocess the gene expression data. We will prepare
+the data in a way such that the samples and genes included are the ones
+appeared in the mutation data.
 
 ```{r}
 samples_mut = comb_sample_maf$barcode %>% unique()
@@ -296,11 +375,17 @@ rows = sapply(new_rows, function(x)strsplit(x,"\\."))
 rownames(GEMat_filter) = data.frame(rows)[1,]
 ```
 
+Then, we want to filter the gene expression data such that the genes
+included are the ones with expressions over 10 in at least 80 samples.
+
 ```{r}
 GEMatrix_norm <- apply(GEMat_filter, 2, function(x){log2(x/sum(x)*1000000+1)})
 filt = apply(GEMatrix,1, function(row) sum(row>10))
 GEMatrix_norm_filter = GEMatrix_norm[filt>=80,]
 ```
+
+Next, we will perform pca on the genes to reduce the dimension of genes
+for samples.
 
 ```{r}
 prep = t(GEMatrix_norm_filter)
@@ -312,38 +397,65 @@ pca_scale = prcomp(GEMatrix_norm_filter_scale)
 pca_variance = data.frame(PC = 1:ncol(pca_scale$x), Variance = pca_scale$sdev^2/sum(pca_scale$sdev^2)*100)
                         
 g = ggplot(pca_variance) + 
-  geom_bar( aes(PC, Variance), stat = "identity") + ylab("Percent of variance explained")
+  geom_bar( aes(PC, Variance), stat = "identity") + ylab("Percent of variance explained")+ggtitle("Variance Explained by Each Principle Component of Genes")
+#png("images/gene_pca_var.png")
 g
+#dev.off()
 ```
 
 ```{r}
 pc_num = pc_var_90(pca_scale)
 ```
 
-```{r}
-ggplot(data = data.frame(pca_scale$x)) +geom_point(aes(x=PC1, y=PC2))
-```
+Following the previous procedures, we found that 6 principle component
+of genes are able to explain the over 90 percent of the variance.
 
 ```{r}
-ggplot(data = data.frame(pca_scale$x)) +geom_point(aes(x=PC2, y=PC3))
+cluster = kmeans(pca_scale$x[,1:pc_num],4,nstart=100)
+#png("images/gene_pca_dot.png")
+ggplot(data = data.frame(pca_scale$x)) +geom_point(aes(x=PC1, y=PC2,color=factor(cluster$clust)))+labs(color="Kmeans Cluster")+ggtitle("Samples Clustered Based on PCA Processed Scaled Gene Expression Levels")
+#dev.off()
 ```
 
-```{r}
-cluster = kmeans(pca_scale$x[,2:pc_num],4,nstart=100)
-ggplot(data = data.frame(pca_scale$x)) +geom_point(aes(x=PC1, y=PC2,color=factor(cluster$clust)))
-ggplot(data = data.frame(pca_scale$x)) +geom_point(aes(x=PC2, y=PC3,color=factor(cluster$clust)))
-```
+After we performed kmeans, we see can see that the clustering on PC1 is
+not distinguishable, but rather more noticeable on PC2. However, a
+possible explanation is that since the samples are all from the same
+disease, there are no dominant principle component in explaining the
+variances of gene expression.
 
 ```{r}
 sample_metadata = sample_metadata %>% filter(barcode %in% samples_mut)
 sample_metadata$GE_PC2 = pca_scale$x[,2]
-ggplot(data = sample_metadata) +geom_boxplot(aes(x=vital_status, y=GE_PC2))
+#png("images/vital_box.png")
+ggplot(data = sample_metadata) +geom_boxplot(aes(x=vital_status, y=GE_PC2))+xlab("Vital Status")+ylab("PC2")+ggtitle("Distribution of PC2 values of Vital Status")
+#dev.off()
 ```
+
+We want to see how PC2 related to the features of the samples since it
+works well in separating the samples based on gene expressions, and
+surprisingly, we find that it actually do a good job in separating the
+vital status of samples.
 
 ```{r}
 ge_df = data.frame(pca_scale$x[,1:6]) %>% rownames_to_column(var="barcode")
 comb_sample_maf = comb_sample_maf %>% left_join(ge_df, by=c("barcode"="barcode"))
-ggplot(data = comb_sample_maf) +geom_point(aes(x=PC2.x, y=PC3.x,color=IMPACT))
-ggplot(data = comb_sample_maf) +geom_point(aes(x=PC2.x, y=PC3.x,color=Variant_Type))
-ggplot(data = comb_sample_maf) +geom_point(aes(x=PC2.x, y=PC3.x,color=One_Consequence))
+
+
 ```
+```{r}
+#png("images/gene_pca_il.png")
+ggplot(data = comb_sample_maf) +geom_point(aes(x=PC1, y=PC2,color=IMPACT))+xlab("PC1")+ylab("PC2")+labs(color="Impact Level")+ggtitle("Samples with Variants Impact Level Based on PCA Processed \nScaled Gene Expression Levels")
+#dev.off()
+#png("images/gene_pca_vt.png")
+ggplot(data = comb_sample_maf) +geom_point(aes(x=PC1, y=PC2,color=Variant_Type))+xlab("PC1")+ylab("PC2")+labs(color="Variant Type")+ggtitle("Samples with Variants Variant Type Based on PCA Processed \nScaled Gene Expression Levels")
+#dev.off()
+#png("images/gene_pca_oc.png")
+ggplot(data = comb_sample_maf) +geom_point(aes(x=PC1, y=PC2,color=One_Consequence))+xlab("PC1")+ylab("PC2")+labs(color="Variant Type")+ggtitle("Samples with One Variants Consequences Based on PCA Processed \nScaled Gene Expression Levels")
+#dev.off()
+```
+
+We try to explore other characteristics of the gene expression principle
+component related to other features of mutation data, including impact
+level, variant type, and consequences. However, no noticeable
+association were find except for some implicit clustering on
+consequences with missense variant and synonymous variant.
